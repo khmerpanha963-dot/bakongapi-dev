@@ -1,0 +1,6 @@
+Flask
+bakong-khqr
+qrcode[pil]
+Pillow
+python-dotenv
+requests
