@@ -1,0 +1,82 @@
+/* General page styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0 20px;
+    background-color: #f9f9f9;
+    color: #333;
+    line-height: 1.6;
+}
+
+/* Heading styles */
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-top: 30px;
+}
+
+h2 {
+    color: #34495e;
+    margin-top: 25px;
+    border-bottom: 2px solid #ecf0f1;
+    padding-bottom: 5px;
+}
+
+/* Endpoint container */
+.endpoint {
+    background: #fff;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 10px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+}
+
+/* Code block styles */
+code {
+    background: #ecf0f1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+pre {
+    background: #ecf0f1;
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Lists */
+ul {
+    padding-left: 20px;
+}
+
+ul li {
+    margin-bottom: 5px;
+}
+
+/* Links */
+a {
+    color: #2980b9;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Responsive for mobile */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    .endpoint {
+        padding: 15px;
+    }
+    
+    pre {
+        padding: 10px;
+    }
+}
