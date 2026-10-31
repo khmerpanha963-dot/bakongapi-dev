@@ -59,10 +59,19 @@ def send_telegram_message(text):
 
 def is_valid_bakong_id(bakong_id):
     try:
-        resp = requests.get("https://bakong-id-check.vercel.app/api/bakong_id?bakong_id=chhira_ly@aclb", timeout=5)
+        resp = requests.get(
+            "https://bakong-id-check.vercel.app/api/bakong_id",
+            params={"bakong_id": bakong_id},
+            timeout=5
+        )
+
         if resp.status_code != 200:
             return False
-        return bakong_id in resp.json().get("bakong_ids", [])
+
+        data = resp.json()
+
+        return data.get("success") is True and data.get("valid") is True
+
     except Exception as e:
         print("Error checking bakong_id:", e)
         return False
