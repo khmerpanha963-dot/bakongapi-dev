@@ -8,7 +8,6 @@ import time
 import threading
 from dotenv import load_dotenv
 import requests
-import os
 
 # =============================
 # LOAD ENV
@@ -18,21 +17,17 @@ load_dotenv()
 # =============================
 # CONFIG
 # =============================
-API_TOKEN = os.getenv("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7ImlkIjoiOTg4YTA0ZGVhMTYyNGY1MCJ9LCJpYXQiOjE3NjY5OTc3MDksImV4cCI6MTc3NDc3MzcwOX0.9RDVxBx5kWMnckgp8TKj-bUNa5n9DWo_mxbmkBNqgkk")
+API_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7ImlkIjoiOTg4YTA0ZGVhMTYyNGY1MCJ9LCJpYXQiOjE3NjY5OTc3MDksImV4cCI6MTc3NDc3MzcwOX0.9RDVxBx5kWMnckgp8TKj-bUNa5n9DWo_mxbmkBNqgkk"
 
-QR_EXPIRE_SECONDS = 15 * 60
-PAID_DELETE_DELAY = 2 * 60
+QR_EXPIRE_SECONDS = 15 * 60   # 15 minutes
+PAID_DELETE_DELAY = 2 * 60    # 2 minutes
 
 # Telegram Configuration
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GROUP_SEND_MD5 = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_BOT_TOKEN = "8509549331:AAF1ll4RxErMq3iO6fff9QuuT4TX0Gny0rc"
+GROUP_SEND_MD5 = "-1003316684204"
 
 # Initialize Flask & KHQR
 app = Flask(__name__)
-
-if not API_TOKEN:
-    raise RuntimeError("Missing BAKONG_API_TOKEN")
-
 khqr = KHQR(API_TOKEN)
 
 # In-memory storage
@@ -44,7 +39,6 @@ PAYMENTS = {}
 def random_id(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
-
 def schedule_paid_delete(md5):
     """Mark payment QR deleted after PAID_DELETE_DELAY"""
     def delayed():
@@ -52,24 +46,26 @@ def schedule_paid_delete(md5):
         payment = PAYMENTS.get(md5)
         if payment and payment["status"] == "PAID":
             payment["qr_deleted"] = True
-
     threading.Thread(target=delayed, daemon=True).start()
-
 
 def send_telegram_message(text):
     if not TELEGRAM_BOT_TOKEN or not GROUP_SEND_MD5:
         return
-
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        requests.post(
-            url,
-            json={"chat_id": GROUP_SEND_MD5, "text": text},
-            timeout=10
-        )
+        requests.post(url, json={"chat_id": GROUP_SEND_MD5, "text": text}, timeout=10)
     except Exception as e:
         print(f"Error sending to Telegram: {e}")
 
+def is_valid_bakong_id(bakong_id):
+    try:
+        resp = requests.get("https://hong123.pythonanywhere.com/api/bakong_id", timeout=5)
+        if resp.status_code != 200:
+            return False
+        return bakong_id in resp.json().get("bakong_ids", [])
+    except Exception as e:
+        print("Error checking bakong_id:", e)
+        return False
 
 # =============================
 # CREATE KHQR
@@ -82,19 +78,12 @@ def create_khqr():
         amount = request.args.get("amount")
 
         if not bakong_id or not merchant_name or not amount:
-            return jsonify({
-                "success": False,
-                "error": "Missing bakong_id, merchantname, or amount"
-            }), 400
+            return jsonify({"success": False, "error": "Missing bakong_id, merchantname, or amount"}), 400
+
+        if not is_valid_bakong_id(bakong_id):
+            return jsonify({"success": False, "error": "bakong_id not allowed"}), 403
 
         amount = float(amount)
-
-        if amount <= 0:
-            return jsonify({
-                "success": False,
-                "error": "Amount must be greater than zero"
-            }), 400
-
         ref_id = random_id()
 
         khqr_string = khqr.create_qr(
@@ -129,12 +118,11 @@ def create_khqr():
         return jsonify({
             "khqrString": khqr_string,
             "md5": md5,
-            "bakong_qr": f"{request.host_url.rstrip('/')}/bakong-qr?md5={md5}"
+            "bakong_qr": f"www.bakongapi-dev.shop/bakong-qr?md5={md5}"
         })
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
 
 # =============================
 # SERVE QR IMAGE
@@ -142,26 +130,18 @@ def create_khqr():
 @app.route("/bakong-qr")
 def serve_qr():
     md5 = request.args.get("md5")
-
     if not md5 or md5 not in PAYMENTS:
         return "QR not found", 404
 
     payment = PAYMENTS[md5]
-
     if payment.get("qr_deleted"):
         return "QR expired", 410
 
-    if time.time() - payment["created_at"] >= QR_EXPIRE_SECONDS:
-        return "QR expired", 410
-
     qr_img = qrcode.make(payment["khqr_string"])
-
     buf = io.BytesIO()
     qr_img.save(buf, format="PNG")
     buf.seek(0)
-
     return send_file(buf, mimetype="image/png")
-
 
 # =============================
 # CHECK PAYMENT (EXTERNAL API)
@@ -172,13 +152,10 @@ def check_khqr_payment():
     bakong_id = request.args.get("bakong_id")
 
     if not md5 or not bakong_id:
-        return jsonify({
-            "success": False,
-            "error": "Missing md5 or bakong_id"
-        }), 400
+        return jsonify({"success": False, "error": "Missing md5 or bakong_id"}), 400
 
-    # No Bakong ID whitelist check.
-    # Every user can use their own Bakong ID.
+    if not is_valid_bakong_id(bakong_id):
+        return jsonify({"success": False, "error": "bakong_id not allowed"}), 403
 
     # Always query external API
     try:
@@ -187,21 +164,14 @@ def check_khqr_payment():
             params={"md5": md5},
             timeout=10
         )
-
         data = resp.json()
-        status = data.get("status", "PENDING")
-
+        status = data.get("status", "PENDING")  # default PENDING if unknown
     except Exception as e:
-        print("Payment check error:", e)
-        status = "PENDING"
+        status = "PENDING"  # if external API fails, default PENDING
 
-    # Save/update in memory
+    # Save/update in memory (optional)
     PAYMENTS[md5] = PAYMENTS.get(md5, {})
-    old_status = PAYMENTS[md5].get("status")
     PAYMENTS[md5]["status"] = status
-
-    if status == "PAID" and old_status != "PAID":
-        schedule_paid_delete(md5)
 
     return jsonify({
         "success": True,
@@ -210,10 +180,6 @@ def check_khqr_payment():
         "amount": PAYMENTS.get(md5, {}).get("amount", 0)
     })
 
-
-# =============================
-# API DOCUMENTATION
-# =============================
 @app.route("/")
 def api_doc():
     return render_template(
@@ -227,8 +193,10 @@ def api_doc():
 # RUN SERVER
 # =============================
 if __name__ == "__main__":
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False
-    )
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
+
+
+
+
+
